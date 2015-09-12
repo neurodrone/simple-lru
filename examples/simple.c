@@ -1,7 +1,7 @@
 #include <stdio.h>
+#include <errno.h>
 
 #include <cache.h>
-#include <khash.h>
 
 int main(int argc, char *argv[]) {
 	struct cache_t *cache;
