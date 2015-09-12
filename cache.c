@@ -3,33 +3,10 @@
 #include <errno.h>
 #include <assert.h>
 
-#include "khash.h"
+#include "cache.h"
 
-KHASH_MAP_INIT_STR(str, struct cache_node_t *)
 
-typedef void* hash_t;
-
-struct cache_t {
-	struct cache_node_t *root;
-	khash_t(str) *hash;
-};
-
-struct cache_node_t {
-	struct cache_node_t *prev, *next;
-	const char *key;
-	void *data;
-};
-
-void cache_free_nodes(struct cache_node_t *root) {
-	struct cache_node_t *cur = root, *next;
-
-	while (cur) {
-		next = cur->next;
-		free(cur);
-
-		cur = next;
-	}
-}
+static void cache_free_nodes(struct cache_node_t *root);
 
 extern struct cache_t *cache_new() {
 	khash_t(str) *h = kh_init(str);
@@ -121,3 +98,15 @@ extern void *cache_remove(struct cache_t *cache, const char *key) {
 
 	return data;
 }
+
+void cache_free_nodes(struct cache_node_t *root) {
+	struct cache_node_t *cur = root, *next;
+
+	while (cur) {
+		next = cur->next;
+		free(cur);
+
+		cur = next;
+	}
+}
+
