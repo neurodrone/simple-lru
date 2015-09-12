@@ -1,6 +1,7 @@
 #include <stdio.h>
-#include <errno.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <assert.h>
 
 #include "khash.h"
 
@@ -61,25 +62,25 @@ extern int cache_add(struct cache_t *cache, const char *key, void *data) {
 			return -1;
 		}
 		nodeval->key = key;
+		nodeval->next = nodeval->prev = NULL;
 
 		k = kh_put(str, cache->hash, key, &absent);
 		kh_value(cache->hash, k) = nodeval;
 
 	} else {
-		if (nodeval->next)
-			nodeval->next->prev = nodeval->prev;
-		if (nodeval->prev)
+		if (nodeval->prev) {
 			nodeval->prev->next = nodeval->next;
+			nodeval->prev = NULL;
+		}
+		if (nodeval->next) {
+			nodeval->next->prev = nodeval->prev;
+			nodeval->next = NULL;
+		}
 	}
 
 	nodeval->data = data;
 
 	if (cache->root == NULL) {
-		cache->root = malloc(sizeof *cache->root);
-		if (!cache->root) {
-			errno = ENOMEM;
-			return -1;
-		}
 		cache->root = nodeval;
 		return 0;
 	}
@@ -90,29 +91,33 @@ extern int cache_add(struct cache_t *cache, const char *key, void *data) {
 	return 0;
 }
 
-extern void print_cache(struct cache_t *cache, FILE *f) {
-	struct cache_node_t *node = cache->root;
+extern void *cache_remove(struct cache_t *cache, const char *key) {
+	int k;
+	struct cache_node_t *nodeval;
+	void *data;
 
-	if (!f) {
-		f = stdout;
+	k = kh_get(str, cache->hash, key);
+	if (!k) {
+		return NULL;
 	}
 
-	while (node) {
-		fprintf(f, "Node: %s, Value: %s\n", node->key, node->data);
-		node = node->next;
-	}
-}
+	nodeval = kh_value(cache->hash, k);
+	assert(nodeval != NULL);
 
-int main(int argc, char *argv[]) {
-	struct cache_t *cache;
+	if (nodeval->prev)
+		nodeval->prev->next = nodeval->next;
+	if (nodeval->next)
+		nodeval->next->prev = nodeval->prev;
 
-	cache = cache_new();
-	if (!cache) {
-		fprintf(stderr, "unable to create cache: %s\n", strerror(errno));
-		return 1;
+	if (cache->root == nodeval) {
+		cache->root = nodeval->next;
+		cache->root->prev = NULL;
 	}
 
-	print_cache(cache, stdout);
+	data = nodeval->data;
+	free(nodeval);
 
-	cache_free(cache);
+	kh_del(str, cache->hash, k);
+
+	return data;
 }
