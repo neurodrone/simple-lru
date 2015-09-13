@@ -6,12 +6,14 @@
 KHASH_MAP_INIT_STR(str, struct cache_node_t *)
 
 struct cache_t {
-	struct cache_node_t *root;
+	struct cache_node_t *head, *tail;
+	struct cache_node_t **buf;
 	khash_t(str) *hash;
+
+	size_t len, capacity;
 };
 
 struct cache_node_t {
-	struct cache_node_t *prev, *next;
 	const char *key;
 	void *data;
 };
@@ -22,6 +24,6 @@ void cache_free(struct cache_t *cache);
 
 int cache_add(struct cache_t *cache, const char *key, void *data);
 
-void *cache_remove(struct cache_t *cache, const char *key);
+void *cache_evict(struct cache_t *cache);
 
 #endif

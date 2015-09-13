@@ -6,30 +6,41 @@
 #include "cache.h"
 
 
-static void cache_free_nodes(struct cache_node_t *root);
-
-extern struct cache_t *cache_new() {
+extern struct cache_t *cache_new(size_t capacity) {
 	khash_t(str) *h = kh_init(str);
 
 	struct cache_t *c = malloc(sizeof *c);
 	if (!c) {
+		errno = ENOMEM;
 		return NULL;
 	}
 
-	c->root = NULL;
+	c->buf = calloc(capacity, sizeof *c->head);
+	if (!c->head) {
+		errno = ENOMEM;
+		return NULL;
+	}
+	c->head = c->tail = c->buf[0];
+	c->len  = 0;
+	c->capacity = capacity;
 	c->hash = h;
 
 	return c;
 }
 
 extern void cache_free(struct cache_t *cache) {
-	cache_free_nodes(cache->root);
+	free(cache->buf);
 	kh_destroy(str, cache->hash);
+	free(cache);
 }
 
 extern int cache_add(struct cache_t *cache, const char *key, void *data) {
 	int k, absent;
 	struct cache_node_t *nodeval;
+
+	if (cache->tail == cache->head && cache->head) {
+		cache_evict(cache);
+	}
 
 	k = kh_get(str, cache->hash, key);
 	if (!k || (nodeval = kh_value(cache->hash, k)) == NULL) {
@@ -39,39 +50,29 @@ extern int cache_add(struct cache_t *cache, const char *key, void *data) {
 			return -1;
 		}
 		nodeval->key = key;
-		nodeval->next = nodeval->prev = NULL;
 
 		k = kh_put(str, cache->hash, key, &absent);
 		kh_value(cache->hash, k) = nodeval;
-
-	} else {
-		if (nodeval->prev) {
-			nodeval->prev->next = nodeval->next;
-			nodeval->prev = NULL;
-		}
-		if (nodeval->next) {
-			nodeval->next->prev = nodeval->prev;
-			nodeval->next = NULL;
-		}
 	}
 
 	nodeval->data = data;
 
-	if (cache->root == NULL) {
-		cache->root = nodeval;
-		return 0;
+	cache->tail = nodeval;
+
+	if (cache->tail == cache->buf[cache->capacity - 1]) {
+		cache->tail = cache->buf[0];
+	} else {
+		cache->tail++;
 	}
 
-	cache->root->prev = nodeval;
-	nodeval->next = cache->root;
-	cache->root = nodeval;
+	cache->len++;
+
 	return 0;
 }
 
-extern void *cache_remove(struct cache_t *cache, const char *key) {
+extern void *cache_get(struct cache_t *cache, const char *key) {
 	int k;
-	struct cache_node_t *nodeval;
-	void *data;
+	struct cache_node_t *nodeval, *tmp;
 
 	k = kh_get(str, cache->hash, key);
 	if (!k) {
@@ -81,32 +82,36 @@ extern void *cache_remove(struct cache_t *cache, const char *key) {
 	nodeval = kh_value(cache->hash, k);
 	assert(nodeval != NULL);
 
-	if (nodeval->prev)
-		nodeval->prev->next = nodeval->next;
-	if (nodeval->next)
-		nodeval->next->prev = nodeval->prev;
+	return nodeval->data;
+}
 
-	if (cache->root == nodeval) {
-		cache->root = nodeval->next;
-		cache->root->prev = NULL;
+extern void *cache_evict(struct cache_t *cache) {
+	int k;
+	void *data;
+	struct cache_node_t *nodeevict, **ptrevict;
+
+	if (cache->len == 0) {
+		return NULL;
 	}
 
-	data = nodeval->data;
-	free(nodeval);
+	nodeevict = cache->head;
+	ptrevict = &nodeevict;
+
+	if (cache->head == cache->buf[cache->capacity - 1]) {
+		cache->head = cache->buf[0];
+	} else {
+		cache->head++;
+	}
+
+	data = nodeevict->data;
+
+	k = kh_get(str, cache->hash, nodeevict->key);
+	assert(k != 0);
 
 	kh_del(str, cache->hash, k);
+	*ptrevict = NULL;
+
+	cache->len--;
 
 	return data;
 }
-
-void cache_free_nodes(struct cache_node_t *root) {
-	struct cache_node_t *cur = root, *next;
-
-	while (cur) {
-		next = cur->next;
-		free(cur);
-
-		cur = next;
-	}
-}
-
