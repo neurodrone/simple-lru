@@ -99,6 +99,40 @@ extern void *cache_remove(struct cache_t *cache, const char *key) {
 	return data;
 }
 
+extern void *cache_get(struct cache_t *cache, const char *key) {
+	int k;
+	struct cache_node_t *nodeval;
+
+	k = kh_get(str, cache->hash, key);
+	if (!k) {
+		return NULL;
+	}
+
+	nodeval = kh_value(cache->hash, k);
+	if (!nodeval) {
+		return NULL;
+	}
+
+	if (cache->root == nodeval) {
+		return nodeval->data;
+	}
+
+	if (nodeval->prev) {
+		nodeval->prev->next = nodeval->next;
+		nodeval->prev = NULL;
+	}
+	if (nodeval->next) {
+		nodeval->next->prev = nodeval->prev;
+		nodeval->next = NULL;
+	}
+
+	cache->root->prev = nodeval;
+	nodeval->next = cache->root;
+	cache->root = nodeval;
+
+	return nodeval->data;
+}
+
 void cache_free_nodes(struct cache_node_t *root) {
 	struct cache_node_t *cur = root, *next;
 

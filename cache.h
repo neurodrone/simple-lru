@@ -24,4 +24,6 @@ int cache_add(struct cache_t *cache, const char *key, void *data);
 
 void *cache_remove(struct cache_t *cache, const char *key);
 
+void *cache_get(struct cache_t *cache, const char *key);
+
 #endif
